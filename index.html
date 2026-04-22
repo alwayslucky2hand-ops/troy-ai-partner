@@ -108,7 +108,7 @@
           <video id="mediaPlayer" autoplay muted playsinline></video>
           <div class="controls-overlay" id="playerControls">
             <button class="control-btn" onclick="switchSourceAction()"><i data-lucide="switch-camera"></i></button>
-            <button class="control-btn" onclick="toggleVideo()"><i data-lucide="video-off" id="icon-video"></i></button>
+            <button class="control-btn" onclick="toggleVideo()"><i data-lucide="video" id="icon-video"></i></button>
             <div class="control-divider" id="recordDivider" style="display:none;"></div>
             <button class="control-btn pause-btn" id="btnPause" onclick="pauseMeeting()" style="display:none;"><i data-lucide="pause" style="fill:currentColor;"></i></button>
             <button class="control-btn play-btn" id="btnResume" onclick="resumeMeeting()" style="display:none;"><i data-lucide="play" style="fill:currentColor;"></i></button>
@@ -161,7 +161,12 @@
   let currentStream = null, mediaRecorder = null;
   let chunkInterval, chunkIndex = 1;
   let postData = { folderId: '', rowIndex: 0, postId: '' };
-  let isRecording = false, isPaused = false, isVideoEnabled = false;
+  
+  // 🚀 總監優化：狀態管理增強
+  let isRecording = false, isPaused = false;
+  let isVideoEnabled = true; // 修正：預設開啟視訊，避免黑畫面
+  let isSwitchingSource = false; // 修正：切換鏡頭時的防呆鎖，防止 MediaRecorder 重疊
+  
   let activeProcessingTasks = new Set();
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   let mobileFacingMode = "user", desktopSource = "camera";
@@ -173,7 +178,7 @@
     document.getElementById('view-main').style.display = 'block';
     document.getElementById('userGreeting').innerHTML = `<i data-lucide="user" class="me-2" style="width:20px;"></i> 你好，${currentUser.role} ${currentUser.email.split('@')[0]}`;
     lucide.createIcons();
-    fetchDataAndRender(); // 登入後只抓取一次資料
+    fetchDataAndRender(); 
   }
 
   async function api(payload) {
@@ -192,6 +197,7 @@
     document.getElementById('btnSendCode').innerText = "驗證碼已送至信箱";
     document.getElementById('codeSection').style.display = 'block';
   }
+  
   async function verifyCode() {
     const email = document.getElementById('loginEmail').value;
     const code = document.getElementById('loginCode').value;
@@ -199,8 +205,10 @@
     if(res.status === 'success') { localStorage.setItem('gx_user', JSON.stringify(res.data)); location.reload(); } 
     else { alert("驗證碼輸入錯誤或已過期"); }
   }
+  
   function logout() { localStorage.removeItem('gx_user'); location.reload(); }
 
+  // 🚀 總監優化：強化非同步串流獲取與原生停止分享防呆
   async function acquireStream() {
     if (currentStream) currentStream.getTracks().forEach(track => track.stop());
     const constraints = { audio: true };
@@ -213,21 +221,64 @@
         currentStream = await navigator.mediaDevices.getUserMedia(constraints);
       } else {
         currentStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        currentStream.getVideoTracks()[0].onended = () => { if(isRecording) { desktopSource = "camera"; acquireStream().then(()=>{if(isRecording&&!isPaused) startChunkRecording();}); } };
+        // 處理原生工具列的「停止共用」
+        currentStream.getVideoTracks()[0].onended = async () => { 
+          if(isRecording) { 
+            isSwitchingSource = true;
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+              mediaRecorder.stop();
+              clearTimeout(chunkInterval);
+            }
+            desktopSource = "camera"; 
+            await acquireStream();
+            isSwitchingSource = false;
+            if(isRecording && !isPaused) startChunkRecording();
+          } else {
+            desktopSource = "camera";
+            await acquireStream();
+          }
+        };
       }
     }
     mediaPlayer.srcObject = currentStream;
     const videoTrack = currentStream.getVideoTracks()[0];
     if (videoTrack) videoTrack.enabled = isVideoEnabled;
+    
+    const iconVideo = document.getElementById('icon-video');
+    if (iconVideo) {
+      iconVideo.setAttribute('data-lucide', isVideoEnabled ? 'video' : 'video-off');
+      lucide.createIcons();
+    }
   }
 
+  // 🚀 總監優化：無縫切換機制與 Try-Catch 復原保護
   async function switchSourceAction() {
     const wasRecording = isRecording;
-    if (wasRecording && mediaRecorder && mediaRecorder.state === "recording") { mediaRecorder.stop(); clearTimeout(chunkInterval); }
+    if (wasRecording && mediaRecorder && mediaRecorder.state === "recording") { 
+      isSwitchingSource = true;
+      mediaRecorder.stop(); 
+      clearTimeout(chunkInterval); 
+    }
+    
+    const oldMobileMode = mobileFacingMode;
+    const oldDesktopSource = desktopSource;
+    
     if (isMobile) mobileFacingMode = (mobileFacingMode === "user") ? "environment" : "user";
     else desktopSource = (desktopSource === "camera") ? "screen" : "camera";
-    await acquireStream();
-    if (wasRecording && !isPaused) startChunkRecording();
+    
+    try {
+      await acquireStream();
+    } catch (err) {
+      console.warn("來源切換被取消或失敗，還原前一個狀態", err);
+      mobileFacingMode = oldMobileMode;
+      desktopSource = oldDesktopSource;
+      await acquireStream(); // 若取消分享螢幕，退回原本鏡頭
+    }
+    
+    if (wasRecording && !isPaused) {
+      isSwitchingSource = false;
+      startChunkRecording();
+    }
   }
 
   function toggleVideo() {
@@ -239,8 +290,14 @@
     }
   }
 
+  // 🚀 總監優化：防止錄影中誤觸關閉面板導致 Stream 死亡
   function toggleRecordUI(forceOpen = false) {
     const el = document.getElementById('recordUI');
+    if (isRecording && !forceOpen && el.style.display === 'block') {
+       alert("⚠️ 錄製正在進行中，請先點擊「停止按鈕」完成錄製，再關閉面板。");
+       return;
+    }
+    
     el.style.display = (forceOpen || el.style.display === 'none') ? 'block' : 'none';
     if(el.style.display === 'block') {
       document.getElementById('videoContainer').style.display = 'block';
@@ -292,6 +349,7 @@
       document.getElementById('recordStatus').innerText = "錄製已暫停";
     }
   }
+  
   function resumeMeeting() {
     if (currentStream) {
       isPaused = false; startChunkRecording();
@@ -303,6 +361,7 @@
     }
   }
 
+  // 🚀 總監優化：防止多重實例重疊
   function startChunkRecording() {
     if (!isRecording || !currentStream || isPaused) return;
     let recordedChunks = [];
@@ -316,9 +375,10 @@
         processChunk(blob, mimeType, chunkIndex);
         chunkIndex++;
       }
-      if (isRecording && !isPaused) startChunkRecording();
+      // 確保不是在切換鏡頭的過程中，才自動啟動下一段錄製
+      if (isRecording && !isPaused && !isSwitchingSource) startChunkRecording();
     };
-    try { mediaRecorder.start(); chunkInterval = setTimeout(() => { if (mediaRecorder.state === "recording") mediaRecorder.stop(); }, 60000); } catch (err) {}
+    try { mediaRecorder.start(); chunkInterval = setTimeout(() => { if (mediaRecorder.state === "recording") mediaRecorder.stop(); }, 60000); } catch (err) { console.error(err); }
   }
 
   function processChunk(blob, mimeType, cIndex) {
@@ -366,33 +426,29 @@
       const btn = document.getElementById('btnStartPost');
       btn.disabled = false;
       btn.style.display = 'flex';
-      fetchDataAndRender(); // 重新抓取最新資料以更新畫面
+      fetchDataAndRender();
     }, 1500);
   }
 
-  // 💡 向後端抓取一次資料，並存入 Frontend Cache
   async function fetchDataAndRender() {
     const res = await api({ action: "getFeed", email: currentUser.email, role: currentUser.role });
     if(res.status === 'success') {
       localPosts = res.data.posts;
       currentPage = 1;
-      applyLocalFilter(); // 抓完資料後自動執行本地篩選
+      applyLocalFilter();
     }
   }
 
-  // 💡 在前端執行毫秒級的資料篩選與分頁
   function applyLocalFilter() {
     const filter = document.getElementById('filterStatus').value;
     const search = document.getElementById('searchInput').value.toLowerCase();
     
     let filtered = localPosts;
     
-    // 狀態篩選
     if (filter && filter !== '全部') {
       filtered = filtered.filter(p => p.Status === filter);
     }
     
-    // 關鍵字搜尋
     if (search) {
       filtered = filtered.filter(p => 
         (p.AI_Summary && p.AI_Summary.toLowerCase().includes(search)) || 
@@ -400,7 +456,6 @@
       );
     }
     
-    // 執行分頁
     const itemsPerPage = 5;
     totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
     
@@ -504,7 +559,7 @@
   async function updateStatus(rowIndex, status) {
     if(confirm(`確定將此對話標記為「${status}」嗎？`)) {
       await api({ action: "updateStatus", postId: rowIndex, status });
-      fetchDataAndRender(); // 狀態變更後，重新跟後端抓取一次同步資料
+      fetchDataAndRender(); 
     }
   }
 </script>
