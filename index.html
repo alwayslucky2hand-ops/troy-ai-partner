@@ -224,7 +224,7 @@
 
   function replyTo(postId) {
     targetParentId = postId;
-    document.getElementById('replyBadge').innerText = `正在回覆貼文 #${postId}`;
+    document.getElementById('replyBadge').innerText = `正在回覆對話脈絡 #${postId}`;
     document.getElementById('replyBadge').style.display = 'block';
     toggleRecordUI(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -278,6 +278,7 @@
     const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
     mediaRecorder = new MediaRecorder(currentStream, { mimeType: mimeType });
     mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    
     mediaRecorder.onstop = () => {
       if (recordedChunks.length > 0) {
         const blob = new Blob(recordedChunks, { type: mimeType });
@@ -295,11 +296,17 @@
       reader.readAsDataURL(blob);
       reader.onloadend = async () => {
         const b64 = reader.result.split(',')[1];
-        await Promise.all([
-          api({ action: "saveDrive", base64Data: b64, mimeType: mimeType, folderId: postData.folderId, rowIndex: postData.rowIndex, chunkIndex: cIndex }),
-          api({ action: "recognizeAI", base64Data: b64, mimeType: mimeType, rowIndex: postData.rowIndex, chunkIndex: cIndex })
-        ]);
-        resolve();
+        try {
+          // 強制雙軌並行上傳，並加上 Try/Catch 防呆，防止單一切片錯誤導致系統卡死
+          await Promise.all([
+            api({ action: "saveDrive", base64Data: b64, mimeType: mimeType, folderId: postData.folderId, rowIndex: postData.rowIndex, chunkIndex: cIndex }),
+            api({ action: "recognizeAI", base64Data: b64, mimeType: mimeType, rowIndex: postData.rowIndex, chunkIndex: cIndex })
+          ]);
+        } catch(err) {
+          console.error(`切片 ${cIndex} 上傳出現錯誤`, err);
+        } finally {
+          resolve();
+        }
       };
     });
     activeProcessingTasks.add(task);
@@ -312,18 +319,34 @@
     document.getElementById('playerControls').style.display = 'none';
     document.getElementById('recordStatus').innerText = "正在等待背景任務完成並呼叫 AI 產生分析...";
     
-    await new Promise(res => { if(mediaRecorder && mediaRecorder.state !== "inactive") { mediaRecorder.onstop = res; mediaRecorder.stop(); } else res(); });
-    if(currentStream) currentStream.getTracks().forEach(t => t.stop());
-    while(activeProcessingTasks.size > 0) await Promise.all(Array.from(activeProcessingTasks));
+    // 💡【關鍵修復】: 攔截並保證最後一次的 onstop 觸發，確保最後一段切片被寫入！
+    const onStopPromise = new Promise(resolve => {
+      if (mediaRecorder && (mediaRecorder.state === "recording" || mediaRecorder.state === "paused")) {
+        const originalOnStop = mediaRecorder.onstop;
+        mediaRecorder.onstop = (e) => { if(originalOnStop) originalOnStop(e); resolve(); };
+        mediaRecorder.stop(); 
+      } else {
+        resolve();
+      }
+    });
 
+    await onStopPromise;
+    if(currentStream) currentStream.getTracks().forEach(t => t.stop());
+    
+    // 等待所有切片非同步處理完畢
+    while(activeProcessingTasks.size > 0) {
+      await Promise.all(Array.from(activeProcessingTasks));
+    }
+
+    // 正式呼叫 AI 總結對話串
     await api({ action: "finalizePost", rowIndex: postData.rowIndex, email: currentUser.email });
     
     document.getElementById('recordStatus').innerText = "處理完成！";
     setTimeout(() => {
-      toggleRecordUI(false); // 關閉錄製畫面
+      toggleRecordUI(false); // 收起錄影區塊
       document.getElementById('btnStartPost').disabled = false;
       document.getElementById('btnStartPost').style.display = 'block';
-      loadFeed(); // 重整頁面
+      loadFeed(); // 刷新資訊流
     }, 1500);
   }
 
@@ -344,6 +367,7 @@
     container.innerHTML = '';
     
     posts.forEach(post => {
+      // 處理影片產生列表 (如果這支影片有3分鐘，就會有3個段落按鈕)
       const urls = post.VideoURLs.split(',\n').filter(u => u);
       const videoHtml = urls.map((url, i) => `<a href="${url}" target="_blank"><i data-lucide="play-circle" style="width:14px;"></i> 觀看段落 ${i+1}</a>`).join('');
 
@@ -366,6 +390,12 @@
             <div class="fw-bold">${post.Role} 發布於 ${new Date(post.Timestamp).toLocaleString()}</div>
             <span class="badge-status status-${post.Status}">${post.Status}</span>
           </div>
+          
+          <details class="mb-3">
+            <summary style="cursor:pointer; font-weight:500; font-size:14px; color:var(--accent);">🔍 點擊展開：完整逐字稿與畫面描述</summary>
+            <div class="p-3 mt-2 bg-light border rounded" style="white-space: pre-wrap; font-size:13px; max-height:250px; overflow-y:auto; color:var(--text-muted);">${post.Transcript}</div>
+          </details>
+
           <p class="mb-1 fw-bold text-primary">📝 內容重點摘要：</p>
           <p class="text-muted" style="white-space: pre-wrap;">${post.AI_Summary}</p>
           
