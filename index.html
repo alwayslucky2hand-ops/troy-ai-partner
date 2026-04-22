@@ -397,9 +397,12 @@
       const urls = post.VideoURLs.split(',\n').filter(u => u);
       const videoHtml = urls.map((url, i) => `<a href="${url}" target="_blank"><i data-lucide="play" style="width:14px; fill:currentColor;"></i> 段落 ${i+1}</a>`).join('');
 
-      // ✨ 使用 marked.js 把純文字轉換成精美的 HTML
-      const htmlSummary = marked.parse(post.AI_Summary || '系統處理中...');
-      const htmlReply = marked.parse(post.AI_Reply || '');
+      // ✨ 使用 marked.js 把純文字轉換成精美的 HTML，拒絕醜陋的 #### 符號
+      let cleanSummary = (post.AI_Summary || '系統處理中...').replace(/####/g, '');
+      let cleanReply = (post.AI_Reply || '').replace(/####/g, '');
+      
+      const htmlSummary = marked.parse(cleanSummary);
+      const htmlReply = marked.parse(cleanReply);
 
       let actionButtons = '';
       if (currentUser.role === '學員' && post.Role === '學員' && post.Status !== '已解決') {
