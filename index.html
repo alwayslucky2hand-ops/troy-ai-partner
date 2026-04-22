@@ -7,27 +7,45 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    /* ... 保留你原本的 CSS 變數與錄影器樣式 ... */
-    :root { --primary: #0f172a; --accent: #2563eb; --bg: #f1f5f9; --surface:#ffffff; }
+    :root { 
+      --primary: #0f172a; --primary-hover: #334155; --accent: #2563eb; 
+      --bg: #f1f5f9; --surface:#ffffff; --border: #e2e8f0;
+      --text-main: #1e293b; --text-muted: #64748b;
+    }
     body { background-color: var(--bg); font-family: system-ui, -apple-system, sans-serif; }
     
-    .app-container { max-width: 800px; margin: auto; padding: 20px; }
+    .app-container { max-width: 800px; margin: auto; padding: 20px; color: var(--text-main); }
     .card-panel { background: var(--surface); border-radius: 12px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.05); margin-bottom: 20px; }
     
+    /* 影片錄製器 UI 保留 */
+    .video-container { position: relative; width: 100%; max-height: 450px; background: #000; border-radius: 12px; margin-bottom: 16px; overflow: hidden; display: none; }
+    video { width: 100%; height: 100%; object-fit: contain; }
+    .status-badge { position: absolute; top: 16px; right: 16px; background: rgba(220, 38, 38, 0.9); color: white; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 13px; display: none; z-index: 10; align-items: center; gap: 6px; }
+    .pulse-dot { width: 8px; height: 8px; background-color: white; border-radius: 50%; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% { transform: scale(0.95); opacity: 0.5; } 50% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.5; } }
+    .controls-overlay { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); padding: 12px 24px; border-radius: 100px; display: flex; gap: 20px; align-items: center; opacity: 1; z-index: 20; }
+    .control-btn { background: none; border: none; color: white; cursor: pointer; padding: 10px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+    .control-btn:hover { background: rgba(255, 255, 255, 0.2); }
+    .control-btn.stop-btn:hover { background: rgba(239, 68, 68, 0.9); }
+    .control-btn.pause-btn:hover { background: rgba(245, 158, 11, 0.9); }
+    .control-btn.play-btn:hover { background: rgba(16, 185, 129, 0.9); }
+    .control-divider { width: 1px; height: 24px; background: rgba(255,255,255,0.2); }
+
     /* 貼文資訊流樣式 */
     .post-card { border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; padding: 20px; margin-bottom: 16px; }
     .post-header { display: flex; justify-content: space-between; margin-bottom: 12px; }
     .badge-status { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+    .status-錄製中 { background: #e2e8f0; color: #475569; }
     .status-待回覆 { background: #fef08a; color: #854d0e; }
+    .status-已回覆 { background: #bfdbfe; color: #1e3a8a; }
     .status-呼叫教練 { background: #fecaca; color: #991b1b; }
     .status-已解決 { background: #bbf7d0; color: #166534; }
     
-    /* 影片畫廊 */
     .video-gallery { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 10px; margin-top: 15px; }
     .video-gallery a { padding: 8px 16px; background: #e2e8f0; border-radius: 8px; text-decoration: none; color: var(--primary); font-size: 13px; white-space: nowrap; }
     .video-gallery a:hover { background: #cbd5e1; }
-    
     .ai-reply-box { background: #f0fdf4; border-left: 4px solid #22c55e; padding: 16px; border-radius: 0 8px 8px 0; margin-top: 15px; }
+    .coach-reply-box { background: #f0f9ff; border-left: 4px solid #3b82f6; padding: 16px; border-radius: 0 8px 8px 0; margin-top: 15px; }
   </style>
 </head>
 <body>
@@ -51,13 +69,29 @@
     </div>
 
     <div class="card-panel">
-      <div class="d-flex justify-content-between align-items-center cursor-pointer" onclick="toggleRecordUI()">
-        <h5 class="m-0"><i data-lucide="video"></i> 發起新提問 / 回覆</h5>
+      <div class="d-flex justify-content-between align-items-center" style="cursor:pointer;" onclick="toggleRecordUI()">
+        <h5 class="m-0"><i data-lucide="video" class="me-2"></i> 發起新提問 / 回覆</h5>
         <i data-lucide="chevron-down"></i>
       </div>
+      
       <div id="recordUI" style="display:none; margin-top:20px;">
-        <button class="btn btn-primary w-100" onclick="startPost()">開始錄製說明</button>
-        <p id="recordStatus" class="mt-2 text-center text-muted"></p>
+        <div id="replyBadge" class="alert alert-info py-2" style="display:none; font-size:14px;"></div>
+        
+        <div class="video-container" id="videoContainer">
+          <div id="recBadge" class="status-badge"><div class="pulse-dot"></div><span id="recText">REC</span></div>
+          <video id="mediaPlayer" autoplay muted playsinline></video>
+          <div class="controls-overlay" id="playerControls">
+            <button class="control-btn" onclick="switchSourceAction()" title="切換鏡頭/螢幕"><i data-lucide="switch-camera"></i></button>
+            <button class="control-btn" onclick="toggleVideo()" title="開關畫面"><i data-lucide="video-off" id="icon-video"></i></button>
+            <div class="control-divider" id="recordDivider" style="display:none;"></div>
+            <button class="control-btn pause-btn" id="btnPause" onclick="pauseMeeting()" style="display:none;"><i data-lucide="pause" style="fill:currentColor;"></i></button>
+            <button class="control-btn play-btn" id="btnResume" onclick="resumeMeeting()" style="display:none;"><i data-lucide="play" style="fill:currentColor;"></i></button>
+            <button class="control-btn stop-btn" id="btnStop" onclick="stopMeeting()" style="display:none;"><i data-lucide="square" style="fill:currentColor;"></i></button>
+          </div>
+        </div>
+
+        <button class="btn btn-primary w-100 mt-2" id="btnStartPost" onclick="startPost()">開始錄製說明</button>
+        <p id="recordStatus" class="mt-2 text-center text-muted fw-bold" style="font-size:14px;"></p>
       </div>
     </div>
 
@@ -73,10 +107,10 @@
 
     <div id="feedContainer"></div>
     
-    <div class="d-flex justify-content-between mt-3">
-      <button class="btn btn-outline-secondary" onclick="changePage(-1)">上一頁</button>
-      <span id="pageInfo" class="align-self-center"></span>
-      <button class="btn btn-outline-secondary" onclick="changePage(1)">下一頁</button>
+    <div class="d-flex justify-content-between mt-3 mb-5">
+      <button class="btn btn-outline-secondary btn-sm" onclick="changePage(-1)">上一頁</button>
+      <span id="pageInfo" class="align-self-center text-muted" style="font-size:14px;"></span>
+      <button class="btn btn-outline-secondary btn-sm" onclick="changePage(1)">下一頁</button>
     </div>
   </div>
 </div>
@@ -84,22 +118,37 @@
 <script>
   lucide.createIcons();
   const GAS_URL = "https://script.google.com/macros/s/AKfycby8Ieg90ujrYBfX1Psn5GNLgBr_W-pIja7b99B3Whiaa2BI4v0VsSmTLMSV81_nMNUi/exec";
+  
+  // 系統狀態
   let currentUser = JSON.parse(localStorage.getItem('gx_user') || 'null');
-  let currentPage = 1;
-  let totalPages = 1;
+  let currentPage = 1, totalPages = 1;
+  let targetParentId = ""; // 追問時記錄對象
+  
+  // 錄影狀態
+  let currentStream = null, mediaRecorder = null;
+  let chunkInterval, chunkIndex = 1;
+  let postData = { folderId: '', rowIndex: 0, postId: '' };
+  let isRecording = false, isPaused = false, isVideoEnabled = false;
+  let activeProcessingTasks = new Set();
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  let mobileFacingMode = "user", desktopSource = "camera";
 
-  // 初始化檢查登入狀態
+  const mediaPlayer = document.getElementById('mediaPlayer');
+
+  // 初始化登入檢查
   if (currentUser) {
     document.getElementById('view-login').style.display = 'none';
     document.getElementById('view-main').style.display = 'block';
-    document.getElementById('userGreeting').innerText = `你好，${currentUser.role}`;
+    document.getElementById('userGreeting').innerText = `👋 你好，${currentUser.role} ${currentUser.email.split('@')[0]}`;
     loadFeed();
   }
 
-  // --- API 呼叫共用函數 ---
+  // --- API 共用 ---
   async function api(payload) {
-    const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify(payload) });
-    return await res.json();
+    try {
+      const res = await fetch(GAS_URL, { method: "POST", redirect: "follow", body: JSON.stringify(payload) });
+      return await res.json();
+    } catch(err) { alert("網路請求失敗: " + err.message); throw err; }
   }
 
   // --- 登入邏輯 ---
@@ -111,25 +160,178 @@
     document.getElementById('btnSendCode').innerText = "已發送";
     document.getElementById('codeSection').style.display = 'block';
   }
-
   async function verifyCode() {
     const email = document.getElementById('loginEmail').value;
     const code = document.getElementById('loginCode').value;
     const res = await api({ action: "verifyCode", email, code });
-    if(res.status === 'success') {
-      localStorage.setItem('gx_user', JSON.stringify(res.data));
-      location.reload();
-    } else { alert("驗證失敗"); }
+    if(res.status === 'success') { localStorage.setItem('gx_user', JSON.stringify(res.data)); location.reload(); } 
+    else { alert("驗證失敗"); }
+  }
+  function logout() { localStorage.removeItem('gx_user'); location.reload(); }
+
+  // --- 錄製硬體授權 ---
+  async function acquireStream() {
+    if (currentStream) currentStream.getTracks().forEach(track => track.stop());
+    const constraints = { audio: true };
+    if (isMobile) {
+      constraints.video = { facingMode: mobileFacingMode, width: { ideal: 854 }, height: { ideal: 480 } };
+      currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+    } else {
+      if (desktopSource === "camera") {
+        constraints.video = { width: { ideal: 854 }, height: { ideal: 480 } };
+        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+      } else {
+        currentStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        currentStream.getVideoTracks()[0].onended = () => { if(isRecording) { desktopSource = "camera"; acquireStream().then(()=>{if(isRecording&&!isPaused) startChunkRecording();}); } };
+      }
+    }
+    mediaPlayer.srcObject = currentStream;
+    const videoTrack = currentStream.getVideoTracks()[0];
+    if (videoTrack) videoTrack.enabled = isVideoEnabled;
   }
 
-  function logout() { localStorage.removeItem('gx_user'); location.reload(); }
+  async function switchSourceAction() {
+    const wasRecording = isRecording;
+    if (wasRecording && mediaRecorder && mediaRecorder.state === "recording") { mediaRecorder.stop(); clearTimeout(chunkInterval); }
+    if (isMobile) mobileFacingMode = (mobileFacingMode === "user") ? "environment" : "user";
+    else desktopSource = (desktopSource === "camera") ? "screen" : "camera";
+    await acquireStream();
+    if (wasRecording && !isPaused) startChunkRecording();
+  }
+
+  function toggleVideo() {
+    if (currentStream && currentStream.getVideoTracks()[0]) {
+      isVideoEnabled = !isVideoEnabled;
+      currentStream.getVideoTracks()[0].enabled = isVideoEnabled;
+      document.getElementById('icon-video').setAttribute('data-lucide', isVideoEnabled ? 'video' : 'video-off');
+      lucide.createIcons();
+    }
+  }
+
+  // --- 錄製流程邏輯 ---
+  function toggleRecordUI(forceOpen = false) {
+    const el = document.getElementById('recordUI');
+    el.style.display = (forceOpen || el.style.display === 'none') ? 'block' : 'none';
+    if(el.style.display === 'block') {
+      document.getElementById('videoContainer').style.display = 'block';
+      acquireStream().catch(()=>{});
+    } else {
+      if (currentStream) currentStream.getTracks().forEach(track => track.stop());
+      targetParentId = ""; 
+      document.getElementById('replyBadge').style.display = 'none';
+    }
+  }
+
+  function replyTo(postId) {
+    targetParentId = postId;
+    document.getElementById('replyBadge').innerText = `正在回覆貼文 #${postId}`;
+    document.getElementById('replyBadge').style.display = 'block';
+    toggleRecordUI(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function startPost() {
+    document.getElementById('btnStartPost').disabled = true;
+    document.getElementById('recordStatus').innerText = "雲端環境啟動中...";
+    try {
+      const res = await api({ action: "initPost", email: currentUser.email, role: currentUser.role, parentId: targetParentId });
+      if (res.status === 'success') {
+        postData = res.data;
+        document.getElementById('recordDivider').style.display = 'block';
+        document.getElementById('btnPause').style.display = 'flex';
+        document.getElementById('btnStop').style.display = 'flex';
+        document.getElementById('btnStartPost').style.display = 'none';
+        
+        if (!currentStream) await acquireStream();
+        isRecording = true; isPaused = false; chunkIndex = 1;
+        document.getElementById('recBadge').style.display = 'flex';
+        document.getElementById('recordStatus').innerText = "錄製進行中... (背景雙軌同步上傳)";
+        startChunkRecording();
+      }
+    } catch(e) { document.getElementById('recordStatus').innerText = "啟動失敗"; document.getElementById('btnStartPost').disabled = false; }
+  }
+
+  function pauseMeeting() {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      isPaused = true; mediaRecorder.stop(); clearTimeout(chunkInterval);
+      document.getElementById('btnPause').style.display = 'none';
+      document.getElementById('btnResume').style.display = 'flex';
+      document.getElementById('recBadge').style.background = "#f59e0b";
+      document.getElementById('recText').innerText = "PAUSED";
+      document.getElementById('recordStatus').innerText = "錄製已暫停";
+    }
+  }
+  function resumeMeeting() {
+    if (currentStream) {
+      isPaused = false; startChunkRecording();
+      document.getElementById('btnResume').style.display = 'none';
+      document.getElementById('btnPause').style.display = 'flex';
+      document.getElementById('recBadge').style.background = "rgba(220, 38, 38, 0.9)";
+      document.getElementById('recText').innerText = "REC";
+      document.getElementById('recordStatus').innerText = "錄製進行中...";
+    }
+  }
+
+  function startChunkRecording() {
+    if (!isRecording || !currentStream || isPaused) return;
+    let recordedChunks = [];
+    const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
+    mediaRecorder = new MediaRecorder(currentStream, { mimeType: mimeType });
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      if (recordedChunks.length > 0) {
+        const blob = new Blob(recordedChunks, { type: mimeType });
+        processChunk(blob, mimeType, chunkIndex);
+        chunkIndex++;
+      }
+      if (isRecording && !isPaused) startChunkRecording();
+    };
+    try { mediaRecorder.start(); chunkInterval = setTimeout(() => { if (mediaRecorder.state === "recording") mediaRecorder.stop(); }, 60000); } catch (err) {}
+  }
+
+  function processChunk(blob, mimeType, cIndex) {
+    const task = new Promise(resolve => {
+      const reader = new FileReader();
+      reader.readAsDataURL(blob);
+      reader.onloadend = async () => {
+        const b64 = reader.result.split(',')[1];
+        await Promise.all([
+          api({ action: "saveDrive", base64Data: b64, mimeType: mimeType, folderId: postData.folderId, rowIndex: postData.rowIndex, chunkIndex: cIndex }),
+          api({ action: "recognizeAI", base64Data: b64, mimeType: mimeType, rowIndex: postData.rowIndex, chunkIndex: cIndex })
+        ]);
+        resolve();
+      };
+    });
+    activeProcessingTasks.add(task);
+    task.then(() => activeProcessingTasks.delete(task));
+  }
+
+  async function stopMeeting() {
+    isRecording = false; isPaused = false; clearTimeout(chunkInterval);
+    document.getElementById('recBadge').style.display = 'none';
+    document.getElementById('playerControls').style.display = 'none';
+    document.getElementById('recordStatus').innerText = "正在等待背景任務完成並呼叫 AI 產生分析...";
+    
+    await new Promise(res => { if(mediaRecorder && mediaRecorder.state !== "inactive") { mediaRecorder.onstop = res; mediaRecorder.stop(); } else res(); });
+    if(currentStream) currentStream.getTracks().forEach(t => t.stop());
+    while(activeProcessingTasks.size > 0) await Promise.all(Array.from(activeProcessingTasks));
+
+    await api({ action: "finalizePost", rowIndex: postData.rowIndex, email: currentUser.email });
+    
+    document.getElementById('recordStatus').innerText = "處理完成！";
+    setTimeout(() => {
+      toggleRecordUI(false); // 關閉錄製畫面
+      document.getElementById('btnStartPost').disabled = false;
+      document.getElementById('btnStartPost').style.display = 'block';
+      loadFeed(); // 重整頁面
+    }, 1500);
+  }
 
   // --- 資訊流邏輯 ---
   async function loadFeed() {
     const filter = document.getElementById('filterStatus').value;
     const search = document.getElementById('searchInput').value;
     const res = await api({ action: "getFeed", email: currentUser.email, role: currentUser.role, filter, search, page: currentPage });
-    
     if(res.status === 'success') {
       totalPages = res.data.totalPages || 1;
       document.getElementById('pageInfo').innerText = `第 ${currentPage} / ${totalPages} 頁`;
@@ -142,9 +344,8 @@
     container.innerHTML = '';
     
     posts.forEach(post => {
-      // 處理影片連結區塊
       const urls = post.VideoURLs.split(',\n').filter(u => u);
-      const videoHtml = urls.map((url, i) => `<a href="${url}" target="_blank"><i data-lucide="play-circle"></i> 觀看段落 ${i+1}</a>`).join('');
+      const videoHtml = urls.map((url, i) => `<a href="${url}" target="_blank"><i data-lucide="play-circle" style="width:14px;"></i> 觀看段落 ${i+1}</a>`).join('');
 
       let actionButtons = '';
       if (currentUser.role === '學員' && post.Role === '學員' && post.Status !== '已解決') {
@@ -152,10 +353,11 @@
           <div class="mt-3 pt-3 border-top d-flex gap-2">
             <button class="btn btn-sm btn-success" onclick="updateStatus(${post.rowIndex}, '已解決')">✅ 有解決問題</button>
             <button class="btn btn-sm btn-danger" onclick="updateStatus(${post.rowIndex}, '呼叫教練')">🚨 呼叫教練來</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="replyTo('${post.PostID}')">✏️ 繼續追問</button>
           </div>
         `;
-      } else if (currentUser.role === '教練') {
-        actionButtons = `<div class="mt-3 pt-3 border-top"><button class="btn btn-sm btn-primary" onclick="replyTo(${post.rowIndex})">回覆此提問</button></div>`;
+      } else if (currentUser.role === '教練' && post.Role === '學員') {
+        actionButtons = `<div class="mt-3 pt-3 border-top"><button class="btn btn-sm btn-primary" onclick="replyTo('${post.PostID}')">回覆此提問</button></div>`;
       }
 
       container.innerHTML += `
@@ -164,13 +366,13 @@
             <div class="fw-bold">${post.Role} 發布於 ${new Date(post.Timestamp).toLocaleString()}</div>
             <span class="badge-status status-${post.Status}">${post.Status}</span>
           </div>
-          <p class="mb-1 fw-bold text-primary">📝 AI 重點摘要：</p>
+          <p class="mb-1 fw-bold text-primary">📝 內容重點摘要：</p>
           <p class="text-muted" style="white-space: pre-wrap;">${post.AI_Summary}</p>
           
-          ${post.AI_Reply ? `
+          ${post.Role === '學員' && post.AI_Reply ? `
             <div class="ai-reply-box">
-              <p class="mb-1 fw-bold text-success">🤖 AI 初步解答：</p>
-              <div style="white-space: pre-wrap;">${post.AI_Reply}</div>
+              <p class="mb-1 fw-bold text-success">🤖 AI 初步解答 (專業教練視角)：</p>
+              <div style="white-space: pre-wrap; font-size:14px;">${post.AI_Reply}</div>
             </div>
           ` : ''}
 
@@ -184,10 +386,7 @@
 
   function changePage(delta) {
     const newPage = currentPage + delta;
-    if(newPage >= 1 && newPage <= totalPages) {
-      currentPage = newPage;
-      loadFeed();
-    }
+    if(newPage >= 1 && newPage <= totalPages) { currentPage = newPage; loadFeed(); }
   }
 
   async function updateStatus(rowIndex, status) {
@@ -196,14 +395,6 @@
       loadFeed();
     }
   }
-
-  function toggleRecordUI() {
-    const el = document.getElementById('recordUI');
-    el.style.display = el.style.display === 'none' ? 'block' : 'none';
-  }
-
-  // (你的錄影邏輯與 startChunkRecording 可放在這裡，並呼叫 initPost、saveDrive、finalizePost)
-  // 此處略過錄影實作細節，與你原版相同，只需更改 payload 帶入 currentUser.email 等資訊。
 </script>
 </body>
 </html>
