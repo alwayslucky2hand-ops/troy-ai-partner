@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GrowthX｜學員陪跑系統</title>
+  <title>GROWTHX｜特洛伊AI賦能陪跑教練系統</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -27,12 +27,7 @@
     .controls-overlay { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); padding: 12px 24px; border-radius: 100px; display: flex; gap: 20px; align-items: center; opacity: 1; z-index: 20; transition: opacity 0.4s ease; }
     .control-btn { background: none; border: none; color: white; cursor: pointer; padding: 10px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s; outline: none; }
     .control-btn:hover { background: rgba(255, 255, 255, 0.2); }
-    .control-btn.stop-btn:hover { background: rgba(239, 68, 68, 0.9); }
-    .control-btn.pause-btn:hover { background: rgba(245, 158, 11, 0.9); }
-    .control-btn.play-btn:hover { background: rgba(16, 185, 129, 0.9); }
-    .control-divider { width: 1px; height: 24px; background: rgba(255,255,255,0.2); }
-
-    /* 貼文資訊流卡片 */
+    
     .post-card { background: var(--surface); border: 1px solid rgba(0,0,0,0.06); border-radius: 16px; padding: 28px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.02); transition: transform 0.2s ease, box-shadow 0.2s ease; }
     .post-card:hover { box-shadow: 0 6px 24px rgba(0,0,0,0.06); transform: translateY(-2px); }
     .post-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
@@ -48,7 +43,6 @@
     .video-gallery a { display: flex; align-items: center; gap: 6px; padding: 10px 18px; background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; text-decoration: none; color: var(--text-main); font-size: 14px; font-weight: 500; white-space: nowrap; transition: 0.2s; }
     .video-gallery a:hover { background: #e2e8f0; color: var(--primary); }
     
-    /* === 🚀 AI 內容精美排版 CSS (Markdown 渲染) === */
     .content-box { font-size: 15px; line-height: 1.8; color: var(--text-muted); }
     .content-box h1, .content-box h2, .content-box h3, .content-box h4 { font-size: 16px; font-weight: 700; color: var(--text-main); margin-top: 18px; margin-bottom: 10px; }
     .content-box strong { color: var(--primary); font-weight: 600; background-color: rgba(37, 99, 235, 0.05); padding: 0 4px; border-radius: 4px; }
@@ -59,16 +53,14 @@
     
     .ai-reply-box { background: #f8fafc; padding: 24px; border-radius: 12px; margin-top: 24px; border: 1px solid rgba(0,0,0,0.04); }
     
-    /* 細節折疊面板美化 */
     details { margin-bottom: 24px; }
     details summary { cursor: pointer; font-size: 14px; font-weight: 500; color: var(--text-muted); display: flex; align-items: center; gap: 8px; list-style: none; user-select: none; transition: color 0.2s; }
     details summary:hover { color: var(--text-main); }
     details summary::-webkit-details-marker { display: none; }
     .details-content { background: #fcfcfc; padding: 20px; border-radius: 12px; border: 1px solid var(--border); margin-top: 12px; font-size: 13px; line-height: 1.6; max-height: 300px; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; color: var(--text-muted); }
 
-    /* 按鈕精緻化 */
     .btn { font-weight: 500; border-radius: 8px; padding: 8px 16px; transition: all 0.2s; }
-    .btn-brand { background-color: var(--primary); color: white; }
+    .btn-brand { background-color: var(--primary); color: white; border: none; }
     .btn-brand:hover { background-color: var(--primary-hover); color: white; }
     .form-control, .form-select { border-radius: 10px; border: 1px solid #cbd5e1; padding: 12px 16px; box-shadow: none; font-size: 15px; }
     .form-control:focus, .form-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
@@ -81,7 +73,7 @@
     <div class="d-flex justify-content-center mb-4">
       <i data-lucide="layers" style="width: 40px; height: 40px; color: var(--primary);"></i>
     </div>
-    <h3 class="fw-bold mb-2">GrowthX 系統</h3>
+    <h3 class="fw-bold mb-2">GROWTHX｜特洛伊AI賦能陪跑教練系統</h3>
     <p class="text-muted mb-4" style="font-size: 14px;">請輸入工作信箱獲取登入權限</p>
     <input type="email" id="loginEmail" class="form-control mb-3" placeholder="name@company.com">
     <button class="btn btn-brand w-100 mb-2 py-2" onclick="sendCode()" id="btnSendCode">獲取驗證碼</button>
@@ -133,7 +125,7 @@
     </div>
 
     <div class="d-flex gap-3 mb-4">
-      <select id="filterStatus" class="form-select w-auto" onchange="loadFeed()">
+      <select id="filterStatus" class="form-select w-auto" onchange="currentPage=1; applyLocalFilter()">
         <option value="全部">全部狀態</option>
         <option value="待回覆">待回覆</option>
         <option value="呼叫教練">已呼叫教練</option>
@@ -141,7 +133,7 @@
       </select>
       <div class="position-relative flex-grow-1">
         <i data-lucide="search" class="position-absolute text-muted" style="left: 14px; top: 14px; width: 18px;"></i>
-        <input type="text" id="searchInput" class="form-control" style="padding-left: 42px;" placeholder="搜尋對話關鍵字..." onkeyup="if(event.key==='Enter') loadFeed()">
+        <input type="text" id="searchInput" class="form-control" style="padding-left: 42px;" placeholder="搜尋對話關鍵字 (邊打字邊搜尋)..." oninput="currentPage=1; applyLocalFilter()">
       </div>
     </div>
 
@@ -158,11 +150,11 @@
 <script>
   lucide.createIcons();
   const GAS_URL = "https://script.google.com/macros/s/AKfycby8Ieg90ujrYBfX1Psn5GNLgBr_W-pIja7b99B3Whiaa2BI4v0VsSmTLMSV81_nMNUi/exec";
-  
-  // 設定 Markdown 解析不跳脫 HTML
   marked.setOptions({ breaks: true, gfm: true });
 
   let currentUser = JSON.parse(localStorage.getItem('gx_user') || 'null');
+  
+  let localPosts = []; 
   let currentPage = 1, totalPages = 1;
   let targetParentId = ""; 
   
@@ -181,7 +173,7 @@
     document.getElementById('view-main').style.display = 'block';
     document.getElementById('userGreeting').innerHTML = `<i data-lucide="user" class="me-2" style="width:20px;"></i> 你好，${currentUser.role} ${currentUser.email.split('@')[0]}`;
     lucide.createIcons();
-    loadFeed();
+    fetchDataAndRender(); 
   }
 
   async function api(payload) {
@@ -209,33 +201,71 @@
   }
   function logout() { localStorage.removeItem('gx_user'); location.reload(); }
 
+  // 💡 獲取基本影像流 (優化手機自適應縮放)
   async function acquireStream() {
     if (currentStream) currentStream.getTracks().forEach(track => track.stop());
-    const constraints = { audio: true };
+    let constraints = { audio: true, video: { width: { ideal: 854 }, height: { ideal: 480 } } };
+    
     if (isMobile) {
-      constraints.video = { facingMode: mobileFacingMode, width: { ideal: 854 }, height: { ideal: 480 } };
-      currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-    } else {
-      if (desktopSource === "camera") {
-        constraints.video = { width: { ideal: 854 }, height: { ideal: 480 } };
-        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-      } else {
+      constraints.video.facingMode = mobileFacingMode;
+    } else if (desktopSource === "screen") {
+      try {
         currentStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        currentStream.getVideoTracks()[0].onended = () => { if(isRecording) { desktopSource = "camera"; acquireStream().then(()=>{if(isRecording&&!isPaused) startChunkRecording();}); } };
-      }
+        currentStream.getVideoTracks()[0].onended = () => { if(isRecording) { desktopSource = "camera"; switchSourceAction(); } };
+      } catch (err) { console.error("螢幕分享取消", err); return; }
     }
+    
+    if (!currentStream || desktopSource === "camera") {
+      currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+    }
+    
     mediaPlayer.srcObject = currentStream;
     const videoTrack = currentStream.getVideoTracks()[0];
     if (videoTrack) videoTrack.enabled = isVideoEnabled;
   }
 
+  // 💡 賈伯斯級零延遲軌道熱插拔 (Hot-Swap Track Replacement)
   async function switchSourceAction() {
-    const wasRecording = isRecording;
-    if (wasRecording && mediaRecorder && mediaRecorder.state === "recording") { mediaRecorder.stop(); clearTimeout(chunkInterval); }
     if (isMobile) mobileFacingMode = (mobileFacingMode === "user") ? "environment" : "user";
     else desktopSource = (desktopSource === "camera") ? "screen" : "camera";
-    await acquireStream();
-    if (wasRecording && !isPaused) startChunkRecording();
+
+    try {
+      let newStream;
+      let constraints = { video: { width: { ideal: 854 }, height: { ideal: 480 } } };
+      
+      if (isMobile) {
+        constraints.video.facingMode = mobileFacingMode;
+        newStream = await navigator.mediaDevices.getUserMedia(constraints);
+      } else {
+        if (desktopSource === "camera") {
+          newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        } else {
+          newStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+          newStream.getVideoTracks()[0].onended = () => { if(isRecording) { desktopSource = "camera"; switchSourceAction(); } };
+        }
+      }
+
+      // 如果正在錄影中，我們「不停止」錄影，直接把新鏡頭軌道塞入正在錄製的 stream 中
+      if (currentStream) {
+        const oldVideoTrack = currentStream.getVideoTracks()[0];
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        
+        if (newVideoTrack) {
+          newVideoTrack.enabled = isVideoEnabled;
+          currentStream.addTrack(newVideoTrack); // 先加入新軌道確保無縫
+          if (oldVideoTrack) {
+            currentStream.removeTrack(oldVideoTrack); // 移除舊軌道
+            oldVideoTrack.stop();
+          }
+        }
+      } else {
+        await acquireStream();
+      }
+    } catch (err) {
+      console.error("無縫切換鏡頭失敗:", err);
+      // 如果失敗，退回傳統模式確保穩定性
+      await acquireStream();
+    }
   }
 
   function toggleVideo() {
@@ -284,7 +314,7 @@
         if (!currentStream) await acquireStream();
         isRecording = true; isPaused = false; chunkIndex = 1;
         document.getElementById('recBadge').style.display = 'flex';
-        document.getElementById('recordStatus').innerText = "錄製進行中... (背景安全同步中)";
+        document.getElementById('recordStatus').innerText = "錄製進行中... (背景無縫同步中)";
         startChunkRecording();
       }
     } catch(e) { document.getElementById('recordStatus').innerText = "啟動失敗，請確認網路連線"; btn.disabled = false; }
@@ -374,19 +404,50 @@
       const btn = document.getElementById('btnStartPost');
       btn.disabled = false;
       btn.style.display = 'flex';
-      loadFeed(); 
+      fetchDataAndRender(); // 重新抓取最新資料以更新畫面
     }, 1500);
   }
 
-  async function loadFeed() {
-    const filter = document.getElementById('filterStatus').value;
-    const search = document.getElementById('searchInput').value;
-    const res = await api({ action: "getFeed", email: currentUser.email, role: currentUser.role, filter, search, page: currentPage });
+  // 💡 向後端抓取一次資料，並存入 Frontend Cache
+  async function fetchDataAndRender() {
+    const res = await api({ action: "getFeed", email: currentUser.email, role: currentUser.role });
     if(res.status === 'success') {
-      totalPages = res.data.totalPages || 1;
-      document.getElementById('pageInfo').innerText = `Page ${currentPage} of ${totalPages}`;
-      renderFeed(res.data.posts);
+      localPosts = res.data.posts;
+      currentPage = 1;
+      applyLocalFilter(); // 抓完資料後自動執行本地篩選
     }
+  }
+
+  // 💡 在前端執行毫秒級的資料篩選與分頁
+  function applyLocalFilter() {
+    const filter = document.getElementById('filterStatus').value;
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    
+    let filtered = localPosts;
+    
+    if (filter && filter !== '全部') {
+      filtered = filtered.filter(p => p.Status === filter);
+    }
+    
+    if (search) {
+      filtered = filtered.filter(p => 
+        (p.AI_Summary && p.AI_Summary.toLowerCase().includes(search)) || 
+        (p.Transcript && p.Transcript.toLowerCase().includes(search))
+      );
+    }
+    
+    const itemsPerPage = 5;
+    totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
+    
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
+    
+    document.getElementById('pageInfo').innerText = `Page ${currentPage} of ${totalPages}`;
+    
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const paginatedPosts = filtered.slice(startIndex, startIndex + itemsPerPage);
+    
+    renderFeed(paginatedPosts);
   }
 
   function renderFeed(posts) {
@@ -397,10 +458,8 @@
       const urls = post.VideoURLs.split(',\n').filter(u => u);
       const videoHtml = urls.map((url, i) => `<a href="${url}" target="_blank"><i data-lucide="play" style="width:14px; fill:currentColor;"></i> 段落 ${i+1}</a>`).join('');
 
-      // ✨ 使用 marked.js 把純文字轉換成精美的 HTML，拒絕醜陋的 #### 符號
       let cleanSummary = (post.AI_Summary || '系統處理中...').replace(/####/g, '');
       let cleanReply = (post.AI_Reply || '').replace(/####/g, '');
-      
       const htmlSummary = marked.parse(cleanSummary);
       const htmlReply = marked.parse(cleanReply);
 
@@ -412,7 +471,7 @@
               <i data-lucide="check-circle" style="width:16px;"></i> 已解決問題
             </button>
             <button class="btn btn-sm btn-outline-danger d-flex align-items-center gap-2" onclick="updateStatus(${post.rowIndex}, '呼叫教練')">
-              <i data-lucide="bell-ring" style="width:16px;"></i> 尋求協助
+              <i data-lucide="bell-ring" style="width:16px;"></i> 呼叫教練
             </button>
             <button class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-2" onclick="replyTo('${post.PostID}')">
               <i data-lucide="message-square-plus" style="width:16px;"></i> 繼續追問
@@ -470,13 +529,17 @@
 
   function changePage(delta) {
     const newPage = currentPage + delta;
-    if(newPage >= 1 && newPage <= totalPages) { currentPage = newPage; loadFeed(); window.scrollTo({top:0, behavior:'smooth'}); }
+    if(newPage >= 1 && newPage <= totalPages) { 
+      currentPage = newPage; 
+      applyLocalFilter(); 
+      window.scrollTo({top:0, behavior:'smooth'}); 
+    }
   }
 
   async function updateStatus(rowIndex, status) {
     if(confirm(`確定將此對話標記為「${status}」嗎？`)) {
       await api({ action: "updateStatus", postId: rowIndex, status });
-      loadFeed();
+      fetchDataAndRender(); // 狀態變更後，重新跟後端抓取一次同步資料
     }
   }
 </script>
