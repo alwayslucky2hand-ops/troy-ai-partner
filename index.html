@@ -176,11 +176,19 @@
     fetchDataAndRender(); 
   }
 
+  // 🛠️ 修正 API 呼叫：增加 text/plain 標頭，避免觸發 CORS 預檢錯誤
   async function api(payload) {
     try {
-      const res = await fetch(GAS_URL, { method: "POST", redirect: "follow", body: JSON.stringify(payload) });
+      const res = await fetch(GAS_URL, { 
+        method: "POST", 
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        redirect: "follow", 
+        body: JSON.stringify(payload) 
+      });
       return await res.json();
-    } catch(err) { alert("網路請求失敗: " + err.message); throw err; }
+    } catch(err) { 
+      throw new Error("網路請求失敗: " + err.message); 
+    }
   }
 
   async function sendCode() {
@@ -192,6 +200,7 @@
     document.getElementById('btnSendCode').innerText = "驗證碼已送至信箱";
     document.getElementById('codeSection').style.display = 'block';
   }
+  
   async function verifyCode() {
     const email = document.getElementById('loginEmail').value;
     const code = document.getElementById('loginCode').value;
@@ -199,6 +208,7 @@
     if(res.status === 'success') { localStorage.setItem('gx_user', JSON.stringify(res.data)); location.reload(); } 
     else { alert("驗證碼輸入錯誤或已過期"); }
   }
+  
   function logout() { localStorage.removeItem('gx_user'); location.reload(); }
 
   // 💡 獲取基本影像流 (優化手機自適應縮放)
@@ -245,16 +255,15 @@
         }
       }
 
-      // 如果正在錄影中，我們「不停止」錄影，直接把新鏡頭軌道塞入正在錄製的 stream 中
       if (currentStream) {
         const oldVideoTrack = currentStream.getVideoTracks()[0];
         const newVideoTrack = newStream.getVideoTracks()[0];
         
         if (newVideoTrack) {
           newVideoTrack.enabled = isVideoEnabled;
-          currentStream.addTrack(newVideoTrack); // 先加入新軌道確保無縫
+          currentStream.addTrack(newVideoTrack); 
           if (oldVideoTrack) {
-            currentStream.removeTrack(oldVideoTrack); // 移除舊軌道
+            currentStream.removeTrack(oldVideoTrack);
             oldVideoTrack.stop();
           }
         }
@@ -263,7 +272,6 @@
       }
     } catch (err) {
       console.error("無縫切換鏡頭失敗:", err);
-      // 如果失敗，退回傳統模式確保穩定性
       await acquireStream();
     }
   }
@@ -298,26 +306,40 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  // 🛠️ 修正啟動流程：正確捕捉「權限未開」與「後端錯誤」
   async function startPost() {
     const btn = document.getElementById('btnStartPost');
     btn.disabled = true;
-    document.getElementById('recordStatus').innerText = "系統安全連線中...";
+    document.getElementById('recordStatus').innerText = "系統連線驗證中...";
+    
     try {
       const res = await api({ action: "initPost", email: currentUser.email, role: currentUser.role, parentId: targetParentId });
-      if (res.status === 'success') {
-        postData = res.data;
-        document.getElementById('recordDivider').style.display = 'block';
-        document.getElementById('btnPause').style.display = 'flex';
-        document.getElementById('btnStop').style.display = 'flex';
-        btn.style.display = 'none';
-        
-        if (!currentStream) await acquireStream();
-        isRecording = true; isPaused = false; chunkIndex = 1;
-        document.getElementById('recBadge').style.display = 'flex';
-        document.getElementById('recordStatus').innerText = "錄製進行中... (背景無縫同步中)";
-        startChunkRecording();
+      
+      if (res.status !== 'success') {
+        throw new Error(res.message || "系統資料庫寫入異常");
       }
-    } catch(e) { document.getElementById('recordStatus').innerText = "啟動失敗，請確認網路連線"; btn.disabled = false; }
+
+      postData = res.data;
+      document.getElementById('recordDivider').style.display = 'block';
+      document.getElementById('btnPause').style.display = 'flex';
+      document.getElementById('btnStop').style.display = 'flex';
+      btn.style.display = 'none';
+      
+      if (!currentStream) {
+        await acquireStream();
+        if (!currentStream) throw new Error("請允許系統使用麥克風或攝影機權限");
+      }
+
+      isRecording = true; isPaused = false; chunkIndex = 1;
+      document.getElementById('recBadge').style.display = 'flex';
+      document.getElementById('recordStatus').innerText = "錄製進行中... (背景無縫同步中)";
+      startChunkRecording();
+
+    } catch(e) { 
+      console.error("啟動失敗詳細記錄：", e);
+      document.getElementById('recordStatus').innerText = "啟動失敗：" + e.message; 
+      btn.disabled = false; 
+    }
   }
 
   function pauseMeeting() {
@@ -341,17 +363,37 @@
     }
   }
 
+  // 🛠️ 增強設備支援度：自動偵測多種 MediaRecorder 格式
   function startChunkRecording() {
     if (!isRecording || !currentStream || isPaused) return;
     let recordedChunks = [];
-    const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
-    mediaRecorder = new MediaRecorder(currentStream, { mimeType: mimeType });
+    
+    let mimeType = '';
+    const types = [
+      'video/webm;codecs=vp9,opus', 
+      'video/webm;codecs=vp8,opus', 
+      'video/webm', 
+      'video/mp4;codecs=avc1,mp4a.40.2', 
+      'video/mp4'
+    ];
+    for (let t of types) {
+      if (MediaRecorder.isTypeSupported(t)) { mimeType = t; break; }
+    }
+    
+    try {
+      mediaRecorder = new MediaRecorder(currentStream, mimeType ? { mimeType: mimeType } : undefined);
+    } catch(err) {
+      console.warn("使用備用格式啟動:", err);
+      mediaRecorder = new MediaRecorder(currentStream); // 最底層備援方案
+    }
+
     mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
     
     mediaRecorder.onstop = () => {
       if (recordedChunks.length > 0) {
-        const blob = new Blob(recordedChunks, { type: mimeType });
-        processChunk(blob, mimeType, chunkIndex);
+        const finalMime = mimeType || 'video/webm'; // Blob 預設 fallback
+        const blob = new Blob(recordedChunks, { type: finalMime });
+        processChunk(blob, finalMime, chunkIndex);
         chunkIndex++;
       }
       if (isRecording && !isPaused) startChunkRecording();
